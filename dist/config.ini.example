@@ -1,0 +1,36 @@
+# SFTP Download Client - sample configuration
+# Place this file next to Client.exe as config.ini
+
+# Package / config version
+Version=1.0.0
+
+# Server connection
+ServerIP=192.168.0.10
+ServerPort=22
+# Remote base directory on SFTP server (absolute path)
+ServerDirectory=/data
+
+User=testuser
+Password=testpassword
+
+# OpenSSH style fingerprint. Required. Connection is refused if empty/missing/mismatch.
+# Example: ssh-keygen -lf /etc/ssh/ssh_host_ecdsa_key.pub -E sha256
+HostFingerprint=SHA256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Connection / operation timeout (seconds). Default 132 if omitted.
+TimeoutSec=132
+# Retriable failure attempts. Default 12 if omitted.
+RetryCount=12
+# Wait between retries (seconds). Default 5 if omitted.
+RetryIntervalSec=5
+
+# Files (1..20)
+# RemoteFile can be relative to ServerDirectory (test.dat -> /data/test.dat)
+# or absolute (/other/path/file.dat).
+RemoteFile1=test.dat
+LocalFile1=C:\SftpDemo\test.dat
+RemoteFile2=test2.dat
+LocalFile2=C:\SftpDemo\test2.dat
+
+# Backward compatible aliases still accepted:
+# Host=... / Port=...

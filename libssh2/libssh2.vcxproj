@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8F3C1A70-2B8E-4D9C-9F21-61A8C0B4E101}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>libssh2</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\$(Configuration)\libssh2\</IntDir>
+    <TargetName>libssh2</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\$(Configuration)\libssh2\</IntDir>
+    <TargetName>libssh2</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;LIBSSH2_WINCNG;LIBSSH2_ECDSA_WINCNG;LIBSSH2_LIBRARY;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>$(SolutionDir)third_party\libssh2-1.11.1\include;$(SolutionDir)third_party\libssh2-1.11.1\src;$(SolutionDir)libssh2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CompileAs>CompileAsC</CompileAs>
+      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;LIBSSH2_WINCNG;LIBSSH2_ECDSA_WINCNG;LIBSSH2_LIBRARY;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>$(SolutionDir)third_party\libssh2-1.11.1\include;$(SolutionDir)third_party\libssh2-1.11.1\src;$(SolutionDir)libssh2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CompileAs>CompileAsC</CompileAs>
+      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\agent.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\bcrypt_pbkdf.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\channel.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\comp.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\chacha.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\cipher-chachapoly.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\crypt.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\crypto.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\global.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\hostkey.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\keepalive.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\kex.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\knownhost.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\mac.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\misc.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\packet.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\pem.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\poly1305.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\publickey.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\scp.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\session.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\sftp.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\transport.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\userauth.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\userauth_kbd_packet.c" />
+    <ClCompile Include="..\third_party\libssh2-1.11.1\src\version.c" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

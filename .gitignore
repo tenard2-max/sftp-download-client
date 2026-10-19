@@ -1,0 +1,11 @@
+dist/Client.exe
+dist/config.ini
+Client.log
+*.user
+*.suo
+*.sdf
+*.opensdf
+.vs/
+ipch/
+third_party/*.zip
+build/

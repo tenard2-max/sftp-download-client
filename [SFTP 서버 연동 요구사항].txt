@@ -1,0 +1,13 @@
+[SFTP 서버 연동 요구사항]
+
+1. SFTP 서비스 제공
+2. ID/Password 인증방식 허용
+3. SFTP 전용 User ID 및 Password 제공
+4. 다운로드 대상 디렉터리 Read 권한 제공
+5. SFTP Server IP 및 Port 제공
+6. SSH Host Key SHA-256 Fingerprint 제공
+7. Client → Server SFTP Port 통신 허용
+8. 테스트용 Remote File 및 경로 제공
+
+※ Private Key 방식의 사용자 인증은 사용하지 않음.
+※ Client는 서버 Host Key Fingerprint를 검증함.
