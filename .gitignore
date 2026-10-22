@@ -1,5 +1,10 @@
 dist/Client.exe
+dist/sft_cli.exe
+dist/sft_ser.exe
+dist/Presenter.exe
 dist/config.ini
+dist/config_ser.ini
+dist/config.key.txt
 Client.log
 *.user
 *.suo

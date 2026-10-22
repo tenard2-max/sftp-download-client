@@ -128,7 +128,48 @@ std::string BuildRemotePath(const std::string& serverDirectory,
     return base + "/" + leaf;
 }
 
+// ---------------------------------------------------------------------------
+// 기능: DosWindow 값이 창을 보이라는 뜻인지 판별한다.
+// 역할: show, yes, on, 1 만 보인다. 그 외는 숨긴다.
+// ---------------------------------------------------------------------------
+bool DosWindowShown(const std::string& value)
+{
+    return _stricmp(value.c_str(), "show") == 0 ||
+           _stricmp(value.c_str(), "yes") == 0 ||
+           _stricmp(value.c_str(), "on") == 0 ||
+           value == "1";
+}
+
 } // namespace
+
+// ---------------------------------------------------------------------------
+// 기능: exe 옆 config.ini 에서 DosWindow 만 읽는다.
+// 역할: 로거보다 먼저 DOS 창 표시 여부를 정한다.
+// ---------------------------------------------------------------------------
+bool PeekDosWindow()
+{
+    const std::string path = JoinPath(GetExecutableDirectory(), "config.ini");
+    std::ifstream input(path.c_str());
+    if (!input) {
+        return false;
+    }
+    std::string line;
+    while (std::getline(input, line)) {
+        line = Trim(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+        std::string key;
+        std::string value;
+        if (!ParseKeyValue(line, key, value)) {
+            continue;
+        }
+        if (_stricmp(key.c_str(), "DosWindow") == 0) {
+            return DosWindowShown(value);
+        }
+    }
+    return false;
+}
 
 // ---------------------------------------------------------------------------
 // 기능: config.ini를 읽어 AppConfig를 구성한다.
@@ -214,6 +255,8 @@ bool LoadConfig(const char* absolutePath, AppConfig& outConfig)
             outConfig.retryCount = atoi(value.c_str());
         } else if (_stricmp(key.c_str(), "RetryIntervalSec") == 0) {
             outConfig.retryIntervalSec = atoi(value.c_str());
+        } else if (_stricmp(key.c_str(), "DosWindow") == 0) {
+            outConfig.showDosWindow = DosWindowShown(value);
         } else if (_stricmp(key.c_str(), "RemoteFile") == 0) {
             remote[1] = value;
             used[1] = true;

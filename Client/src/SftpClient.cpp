@@ -24,12 +24,16 @@
 
 namespace {
 
-// 1회 시도 결과: 성공 / 재시도 가능 실패 / 재시도 금지(치명)
+// 1회 시도 결과: 성공 / 초기 접속 재시도 / 파일 전송 재시도 / 재시도 금지
 enum AttemptResult {
     AttemptSuccess = 0,
     AttemptRetriable = 1,
-    AttemptFatal = 2
+    AttemptFatal = 2,
+    AttemptTransfer = 3
 };
+
+const int kTransferRetryCount = 20;
+const DWORD kTransferBudgetMs = 20UL * 60UL * 1000UL;
 
 // ---------------------------------------------------------------------------
 // 기능: GetTickCount 기반 경과 시간(ms) 측정기.
@@ -62,6 +66,21 @@ std::string FileNameOnly(const std::string& path)
         return path;
     }
     return path.substr(pos + 1);
+}
+
+// ---------------------------------------------------------------------------
+// 기능: 로컬 파일 크기를 읽는다.
+// 역할: 이미 받은 파일은 건너뛰고, 끊긴 파일은 그 크기부터 이어 받기 위해 사용한다.
+// ---------------------------------------------------------------------------
+bool LocalFileSize(const std::string& path, libssh2_uint64_t& size)
+{
+    WIN32_FILE_ATTRIBUTE_DATA info;
+    if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &info)) {
+        size = 0;
+        return false;
+    }
+    size = (static_cast<libssh2_uint64_t>(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +402,25 @@ bool DownloadOneFile(LIBSSH2_SFTP* sftp, const FileTransferItem& item)
         LogInfo("REMOTE_STAT", oss.str());
     }
 
+    const bool knownSize = (attrs.flags & LIBSSH2_SFTP_ATTR_SIZE) != 0 && attrs.filesize > 0;
+    libssh2_uint64_t localSize = 0;
+    bool localExists = LocalFileSize(item.localPath, localSize);
+    if (knownSize && localExists && localSize == attrs.filesize) {
+        std::ostringstream oss;
+        oss << "reason=already_complete file=" << fileName
+            << " remote=" << item.remotePath
+            << " local=" << item.localPath
+            << " size=" << static_cast<unsigned long long>(localSize);
+        LogOk("DOWNLOAD", oss.str());
+        return true;
+    }
+    if (knownSize && localExists && localSize > attrs.filesize) {
+        DeleteFileA(item.localPath.c_str());
+        localExists = false;
+        localSize = 0;
+        LogWarn("DOWNLOAD_RESUME", std::string("reason=local_larger_restart file=") + fileName);
+    }
+
     // 로컬 부모 폴더 생성
     if (!EnsureParentDirectory(item.localPath)) {
         std::ostringstream oss;
@@ -413,9 +451,22 @@ bool DownloadOneFile(LIBSSH2_SFTP* sftp, const FileTransferItem& item)
     }
     LogInfo("REMOTE_OPEN", std::string("reason=ok file=") + fileName);
 
-    // 로컬 파일 생성
+    libssh2_uint64_t offset = 0;
+    const char* openMode = "wb";
+    if (knownSize && localExists && localSize > 0 && localSize < attrs.filesize) {
+        offset = localSize;
+        openMode = "ab";
+        libssh2_sftp_seek64(handle, offset);
+        std::ostringstream oss;
+        oss << "file=" << fileName
+            << " offset=" << static_cast<unsigned long long>(offset)
+            << " total=" << static_cast<unsigned long long>(attrs.filesize);
+        LogInfo("DOWNLOAD_RESUME", oss.str());
+    }
+
+    // 로컬 파일 생성. 이어 받기는 기존 내용 뒤에 붙인다.
     FILE* localFile = NULL;
-    if (fopen_s(&localFile, item.localPath.c_str(), "wb") != 0 || localFile == NULL) {
+    if (fopen_s(&localFile, item.localPath.c_str(), openMode) != 0 || localFile == NULL) {
         std::ostringstream oss;
         oss << "reason=local_file_open_failed file=" << fileName
             << " local=" << item.localPath
@@ -429,8 +480,9 @@ bool DownloadOneFile(LIBSSH2_SFTP* sftp, const FileTransferItem& item)
     // 청크 단위 다운로드
     char buffer[16 * 1024];
     bool ok = true;
-    libssh2_uint64_t total = 0;
+    libssh2_uint64_t total = offset;
     const char* failReason = NULL;
+    int lastPercent = -1;
 
     while (true) {
         const ssize_t n = libssh2_sftp_read(handle, buffer, sizeof(buffer));
@@ -442,6 +494,21 @@ bool DownloadOneFile(LIBSSH2_SFTP* sftp, const FileTransferItem& item)
                 break;
             }
             total += static_cast<libssh2_uint64_t>(n);
+            if (knownSize) {
+                int percent = static_cast<int>((total * 100) / attrs.filesize);
+                if (percent > 99) {
+                    percent = 99;
+                }
+                if (lastPercent < 0 || percent >= lastPercent + 5) {
+                    std::ostringstream progress;
+                    progress << "file=" << fileName
+                             << " percent=" << percent
+                             << " bytes=" << static_cast<unsigned long long>(total)
+                             << " total=" << static_cast<unsigned long long>(attrs.filesize);
+                    LogInfo("DOWNLOAD_PROGRESS", progress.str());
+                    lastPercent = percent;
+                }
+            }
             continue;
         }
 
@@ -467,8 +534,7 @@ bool DownloadOneFile(LIBSSH2_SFTP* sftp, const FileTransferItem& item)
     libssh2_sftp_close(handle);
 
     if (!ok) {
-        // 실패 시 불완전 로컬 파일 삭제
-        DeleteFileA(item.localPath.c_str());
+        // 받아 둔 내용은 지우지 않는다. 다음 시도가 그 위치부터 이어 받는다.
         if (failReason != NULL && strcmp(failReason, "remote_read_failed") != 0) {
             std::ostringstream oss;
             oss << "reason=" << failReason
@@ -491,7 +557,9 @@ bool DownloadOneFile(LIBSSH2_SFTP* sftp, const FileTransferItem& item)
             << " local_size=" << static_cast<unsigned long long>(total)
             << " elapsed_ms=" << timer.ElapsedMs();
         LogError("DOWNLOAD_VERIFY", oss.str());
-        DeleteFileA(item.localPath.c_str());
+        if (total > attrs.filesize) {
+            DeleteFileA(item.localPath.c_str());
+        }
         return false;
     }
 
@@ -547,7 +615,7 @@ void CleanupSession(LIBSSH2_SFTP*& sftp,
 // ---------------------------------------------------------------------------
 // 기능: 연결~다운로드까지 1회 전체 시도를 수행한다.
 // 역할: RunSftpDownload의 재시도 루프에서 호출되는 단위 작업.
-// 반환: Success / Retriable / Fatal(HostKey 불일치 등)
+// 반환: Success / 초기 접속 재시도 / 파일 전송 재시도 / Fatal(HostKey·로그인 실패)
 // ---------------------------------------------------------------------------
 AttemptResult AttemptDownload(const AppConfig& config)
 {
@@ -630,10 +698,10 @@ AttemptResult AttemptDownload(const AppConfig& config)
         LogOk("HOSTKEY_VERIFY", "reason=ok");
     }
 
-    // 5) ID/PW 로그인
+    // 5) ID/PW 로그인. 계정/비밀번호 실패는 같은 값으로 다시 시도하지 않고 바로 종료한다.
     if (!AuthenticatePassword(session, config.user, config.password)) {
         CleanupSession(sftp, session, sock);
-        return AttemptRetriable;
+        return AttemptFatal;
     }
 
     // 6) SFTP 세션 시작
@@ -670,7 +738,7 @@ AttemptResult AttemptDownload(const AppConfig& config)
         std::ostringstream oss;
         oss << "reason=download_failed elapsed_ms=" << attemptTimer.ElapsedMs();
         LogError("ATTEMPT_RESULT", oss.str());
-        result = AttemptRetriable;
+        result = AttemptTransfer;
     }
 
     // 8) 세션/소켓 정리
@@ -725,41 +793,90 @@ int RunSftpDownload(const AppConfig& config)
     }
 
     int exitCode = 1;
+    bool transferPhase = false;
+    int connectAttempt = 0;
+    int transferAttempt = 0;
+    DWORD transferOrigin = 0;
 
-    // 재시도 루프 (기본 12회)
-    for (int attempt = 1; attempt <= config.retryCount; ++attempt) {
-        {
+    // 초기 접속 실패는 설정 횟수(기본 5회)까지, 파일 전송 실패는 20회와 20분 안에서 다시 시도한다.
+    for (;;) {
+        const DWORD attemptStart = GetTickCount();
+        if (transferPhase) {
+            const DWORD elapsed = attemptStart - transferOrigin;
+            if (transferAttempt >= kTransferRetryCount) {
+                std::ostringstream oss;
+                oss << "reason=max_retry_exceeded stage=transfer retry_count=" << kTransferRetryCount;
+                LogError("RUN_RESULT", oss.str());
+                break;
+            }
+            if (elapsed >= kTransferBudgetMs) {
+                LogError("RUN_RESULT", "reason=transfer_time_exceeded budget_min=20 stage=transfer");
+                break;
+            }
+            ++transferAttempt;
             std::ostringstream oss;
-            oss << "attempt=" << attempt << "/" << config.retryCount;
+            oss << "attempt=" << transferAttempt << "/" << kTransferRetryCount << " stage=transfer";
+            LogInfo("RETRY", oss.str());
+        } else {
+            if (connectAttempt >= config.retryCount) {
+                std::ostringstream oss;
+                oss << "reason=max_retry_exceeded stage=connect retry_count=" << config.retryCount;
+                LogError("RUN_RESULT", oss.str());
+                break;
+            }
+            ++connectAttempt;
+            std::ostringstream oss;
+            oss << "attempt=" << connectAttempt << "/" << config.retryCount << " stage=connect";
             LogInfo("RETRY", oss.str());
         }
 
-        // 1회 전체 시도 실행
         const AttemptResult result = AttemptDownload(config);
         if (result == AttemptSuccess) {
             LogOk("RUN_RESULT", "reason=success");
             exitCode = 0;
             break;
         }
-
         if (result == AttemptFatal) {
             LogError("RUN_RESULT", "reason=fatal_no_retry");
             exitCode = 1;
             break;
         }
 
-        if (attempt < config.retryCount) {
-            std::ostringstream oss;
-            oss << "reason=retriable_failure next_attempt=" << (attempt + 1)
-                << " sleep_sec=" << config.retryIntervalSec;
-            LogWarn("RETRY", oss.str());
-            if (config.retryIntervalSec > 0) {
-                Sleep(static_cast<DWORD>(config.retryIntervalSec) * 1000UL);
+        if (result == AttemptTransfer && !transferPhase) {
+            transferPhase = true;
+            transferOrigin = attemptStart;
+            transferAttempt = 1;
+        }
+
+        const char* stage = transferPhase ? "transfer" : "connect";
+        const int limit = transferPhase ? kTransferRetryCount : config.retryCount;
+        const int used = transferPhase ? transferAttempt : connectAttempt;
+        if (transferPhase) {
+            const DWORD elapsed = GetTickCount() - transferOrigin;
+            if (used >= limit || elapsed >= kTransferBudgetMs) {
+                std::ostringstream oss;
+                if (elapsed >= kTransferBudgetMs) {
+                    oss << "reason=transfer_time_exceeded budget_min=20 stage=transfer";
+                } else {
+                    oss << "reason=max_retry_exceeded stage=transfer retry_count=" << limit;
+                }
+                LogError("RUN_RESULT", oss.str());
+                break;
             }
-        } else {
+        } else if (used >= limit) {
             std::ostringstream oss;
-            oss << "reason=max_retry_exceeded retry_count=" << config.retryCount;
+            oss << "reason=max_retry_exceeded stage=connect retry_count=" << limit;
             LogError("RUN_RESULT", oss.str());
+            break;
+        }
+
+        std::ostringstream oss;
+        oss << "reason=retriable_failure next_attempt=" << (used + 1)
+            << " stage=" << stage
+            << " sleep_sec=" << config.retryIntervalSec;
+        LogWarn("RETRY", oss.str());
+        if (config.retryIntervalSec > 0) {
+            Sleep(static_cast<DWORD>(config.retryIntervalSec) * 1000UL);
         }
     }
 

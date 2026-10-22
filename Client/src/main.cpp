@@ -2,7 +2,26 @@
 #include "SftpClient.h"
 #include "Logger.h"
 
+#include <windows.h>
+
 #include <sstream>
+
+// ---------------------------------------------------------------------------
+// 기능: config.ini 의 DosWindow 에 맞춰 DOS 창을 만들거나 붙이지 않는다.
+// 역할: show 이면 로그가 보이는 콘솔을 연다. hide 이면 창 없이 진행한다.
+// ---------------------------------------------------------------------------
+void ApplyDosWindow(bool show)
+{
+    if (!show) {
+        return;
+    }
+    if (GetConsoleWindow() == NULL && !AllocConsole()) {
+        return;
+    }
+    SetConsoleTitleW(L"SFTP Download Client");
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
+}
 
 // ---------------------------------------------------------------------------
 // 기능: Client.exe 프로세스 진입점.
@@ -10,6 +29,9 @@
 // ---------------------------------------------------------------------------
 int main(int /*argc*/, char** /*argv*/)
 {
+    // DOS 창은 로그보다 먼저 연다. 기본은 숨김이다.
+    ApplyDosWindow(PeekDosWindow());
+
     // 콘솔/파일 로그 시스템 기동 (Client.log)
     InitLogger();
     LogInfo("APP_START", "name=SFTP_Download_Client_PoC");

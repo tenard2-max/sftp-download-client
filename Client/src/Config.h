@@ -33,16 +33,19 @@ struct AppConfig {
 
     // TCP/SSH/SFTP 타임아웃(초). 기본 132
     int timeoutSec;
-    // 재시도 가능 실패 시 시도 횟수. 기본 12
+    // 초기 접속 실패 시 시도 횟수. 기본 5, 모두 실패하면 종료
     int retryCount;
     // 재시도 대기(초). 기본 5
     int retryIntervalSec;
+    // config.ini DosWindow. show 이면 DOS 창을 띄운다. 기본은 숨김
+    bool showDosWindow;
 
     AppConfig()
         : port(22)
         , timeoutSec(132)
-        , retryCount(12)
+        , retryCount(5)
         , retryIntervalSec(5)
+        , showDosWindow(false)
     {
         version = "1.0.0";
     }
@@ -55,5 +58,11 @@ struct AppConfig {
 // 반환: 성공 true / 실패 false (로그에 사유 기록)
 // ---------------------------------------------------------------------------
 bool LoadConfig(const char* absolutePath, AppConfig& outConfig);
+
+// ---------------------------------------------------------------------------
+// 기능: config.ini 의 DosWindow 값만 먼저 읽는다.
+// 역할: 로그를 열기 전에 DOS 창을 보일지 결정한다. 없거나 hide 이면 false.
+// ---------------------------------------------------------------------------
+bool PeekDosWindow();
 
 #endif

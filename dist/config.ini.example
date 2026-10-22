@@ -19,10 +19,13 @@ HostFingerprint=SHA256:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Connection / operation timeout (seconds). Default 132 if omitted.
 TimeoutSec=132
-# Retriable failure attempts. Default 12 if omitted.
-RetryCount=12
+# Initial connection attempts. Default 5 if omitted. Process exits after the last failure.
+# File-transfer failures use a separate limit: 20 attempts or 20 minutes.
+RetryCount=5
 # Wait between retries (seconds). Default 5 if omitted.
 RetryIntervalSec=5
+# DOS window while Client.exe runs. show or hide. Default hide.
+DosWindow=hide
 
 # Files (1..20)
 # RemoteFile can be relative to ServerDirectory (test.dat -> /data/test.dat)

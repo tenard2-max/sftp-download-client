@@ -88,11 +88,23 @@ foreach ($name in $cppFiles) {
 
 $exe = Join-Path $outDir "Client.exe"
 Write-Host "link $exe"
-& $gxx -m64 -static -o $exe @objects -lws2_32 -lbcrypt -lcrypt32 -lshlwapi
+& $gxx -m64 -mwindows -static -o $exe @objects -lws2_32 -lbcrypt -lcrypt32 -lshlwapi
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if (-not (Test-Path (Join-Path $outDir "config.ini"))) {
     Copy-Item (Join-Path $outDir "config.ini.example") (Join-Path $outDir "config.ini")
 }
 Write-Host "OK $exe"
-Get-Item $exe | Select-Object FullName, Length
+
+$presenterSrc = Join-Path $clientSrc "Presenter.cpp"
+$clientUi = Join-Path $outDir "sft_cli.exe"
+$serverUi = Join-Path $outDir "sft_ser.exe"
+Write-Host "c++ Presenter.cpp"
+Copy-Item (Join-Path $Root "Client\res\atec_logo.png") (Join-Path $outDir "atec_logo.png") -Force
+& $gxx -std=c++14 -O2 -m64 -mwindows -static -finput-charset=UTF-8 -Wall -DUNICODE -D_UNICODE `
+    -DWIN32 -D_WIN32_WINNT=0x0A00 $presenterSrc -o $clientUi -ladvapi32 -lshell32 -luser32 -lgdi32 -lgdiplus
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Copy-Item $clientUi $serverUi -Force
+Write-Host "OK $clientUi"
+Write-Host "OK $serverUi"
+Get-Item $exe, $clientUi, $serverUi | Select-Object FullName, Length
