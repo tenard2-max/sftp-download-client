@@ -24,6 +24,7 @@ const int IDC_BTN_SETUP = 105;
 const int IDC_SETUP_USER = 301;
 const int IDC_SETUP_PASS = 302;
 const int IDC_SETUP_FP = 303;
+const int IDC_SETUP_IP = 304;
 const int IDC_INPUT_EDIT = 311;
 const int IDC_INPUT_SAVE = 312;
 const int IDC_FP_EDIT = 321;
@@ -59,6 +60,7 @@ HWND g_btnSetup = NULL;
 HWND g_setupWnd = NULL;
 HWND g_userWnd = NULL;
 HWND g_passWnd = NULL;
+HWND g_ipWnd = NULL;
 HWND g_fpWnd = NULL;
 HWND g_fpEdit = NULL;
 HWND g_fpButton = NULL;
@@ -1330,6 +1332,39 @@ bool HasUnsafeSettingChar(const std::wstring& text)
 }
 
 // ---------------------------------------------------------------------------
+// 기능: IPv4 주소 형식인지 확인한다.
+// 역할: 서버 설정 IP 저장 전에 숫자 네 칸인지 본다.
+// ---------------------------------------------------------------------------
+bool IsIpv4(const std::wstring& text)
+{
+    int parts = 0;
+    int value = 0;
+    bool digit = false;
+    for (size_t i = 0; i <= text.size(); ++i) {
+        const wchar_t ch = (i == text.size()) ? L'.' : text[i];
+        if (ch >= L'0' && ch <= L'9') {
+            if (!digit) {
+                value = 0;
+                digit = true;
+            }
+            value = value * 10 + (ch - L'0');
+            if (value > 255) {
+                return false;
+            }
+        } else if (ch == L'.') {
+            if (!digit) {
+                return false;
+            }
+            ++parts;
+            digit = false;
+        } else {
+            return false;
+        }
+    }
+    return parts == 4;
+}
+
+// ---------------------------------------------------------------------------
 // 기능: net user 출력을 읽고 성공 여부를 돌려준다.
 // 역할: 계정 반영 실패 사유를 화면 로그에 남긴다.
 // ---------------------------------------------------------------------------
@@ -1566,6 +1601,7 @@ LRESULT CALLBACK InputProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK FingerprintProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void OpenUserDialog();
 void OpenPasswordDialog();
+void OpenIpDialog();
 void OpenFingerprintDialog();
 
 // ---------------------------------------------------------------------------
@@ -1633,6 +1669,10 @@ LRESULT CALLBACK SetupProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                       WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
                       24, 116, 252, 36, hwnd,
                       reinterpret_cast<HMENU>(static_cast<UINT_PTR>(IDC_SETUP_FP)), g_inst, NULL);
+        CreateWindowW(L"BUTTON", L"IP 설정",
+                      WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+                      24, 164, 252, 36, hwnd,
+                      reinterpret_cast<HMENU>(static_cast<UINT_PTR>(IDC_SETUP_IP)), g_inst, NULL);
         return 0;
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
@@ -1644,6 +1684,9 @@ LRESULT CALLBACK SetupProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         case IDC_SETUP_FP:
             OpenFingerprintDialog();
+            return 0;
+        case IDC_SETUP_IP:
+            OpenIpDialog();
             return 0;
         default:
             break;
@@ -1679,11 +1722,17 @@ LRESULT CALLBACK InputProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg) {
     case WM_CREATE: {
         const CREATESTRUCTW* created = reinterpret_cast<const CREATESTRUCTW*>(lParam);
-        const bool password = created->lpCreateParams != NULL;
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, password ? 1 : 0);
-        const std::wstring current = password ? ReadConfigValue("Password") : ReadConfigValue("User");
+        const INT_PTR mode = reinterpret_cast<INT_PTR>(created->lpCreateParams);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, mode);
+        const char* key = "User";
+        if (mode == 1) {
+            key = "Password";
+        } else if (mode == 2) {
+            key = "ServerIP";
+        }
+        const std::wstring current = ReadConfigValue(key);
         HWND edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", current.c_str(),
-                                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | (password ? ES_PASSWORD : 0),
+                                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | (mode == 1 ? ES_PASSWORD : 0),
                                     20, 48, 380, 28, hwnd,
                                     reinterpret_cast<HMENU>(static_cast<UINT_PTR>(IDC_INPUT_EDIT)), g_inst, NULL);
         SendMessageW(edit, WM_SETFONT, reinterpret_cast<WPARAM>(g_font), TRUE);
@@ -1695,15 +1744,34 @@ LRESULT CALLBACK InputProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     }
     case WM_COMMAND:
         if (LOWORD(wParam) == IDC_INPUT_SAVE && HIWORD(wParam) == BN_CLICKED) {
-            const bool password = GetWindowLongPtrW(hwnd, GWLP_USERDATA) != 0;
+            const INT_PTR mode = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
             wchar_t buffer[256] = {0};
             GetWindowTextW(GetDlgItem(hwnd, IDC_INPUT_EDIT), buffer, 256);
             const std::wstring value(buffer);
             if (value.empty() || HasUnsafeSettingChar(value)) {
-                AddLog(password ? L"Password 를 확인하세요." : L"User 를 확인하세요.", kError);
+                const wchar_t* message = L"User 를 확인하세요.";
+                if (mode == 1) {
+                    message = L"Password 를 확인하세요.";
+                } else if (mode == 2) {
+                    message = L"IP 를 확인하세요.";
+                }
+                AddLog(message, kError);
                 return 0;
             }
-            if (password) {
+            if (mode == 2) {
+                if (!IsIpv4(value)) {
+                    AddLog(L"IP 형식을 확인하세요. 예: 127.0.0.1", kError);
+                    return 0;
+                }
+                if (!WriteConfigValue("ServerIP", value)) {
+                    AddLog(L"IP 저장 실패   config_ser.ini", kError);
+                    return 0;
+                }
+                AddLog(L"IP 저장   config_ser.ini   " + value, kOk);
+                DestroyWindow(hwnd);
+                return 0;
+            }
+            if (mode == 1) {
                 const std::wstring user = ReadConfigValue("User");
                 std::wstring detail;
                 if (user.empty() || !ApplyAccountPassword(user, value, detail)) {
@@ -1737,8 +1805,13 @@ LRESULT CALLBACK InputProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, kTitle);
         SelectObject(dc, g_font);
-        const bool password = GetWindowLongPtrW(hwnd, GWLP_USERDATA) != 0;
-        const wchar_t* label = password ? L"Password" : L"User";
+        const INT_PTR mode = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+        const wchar_t* label = L"User";
+        if (mode == 1) {
+            label = L"Password";
+        } else if (mode == 2) {
+            label = L"IP";
+        }
         TextOutW(dc, 20, 18, label, lstrlenW(label));
         EndPaint(hwnd, &ps);
         return 0;
@@ -1753,15 +1826,17 @@ LRESULT CALLBACK InputProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
-    case WM_DESTROY:
-        if (GetWindowLongPtrW(hwnd, GWLP_USERDATA) != 0) {
-            if (g_passWnd == hwnd) {
-                g_passWnd = NULL;
-            }
+    case WM_DESTROY: {
+        const INT_PTR mode = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+        if (mode == 1 && g_passWnd == hwnd) {
+            g_passWnd = NULL;
+        } else if (mode == 2 && g_ipWnd == hwnd) {
+            g_ipWnd = NULL;
         } else if (g_userWnd == hwnd) {
             g_userWnd = NULL;
         }
         return 0;
+    }
     default:
         break;
     }
@@ -1852,7 +1927,7 @@ void OpenSetupDialog()
         return;
     }
     EnsurePopupClasses();
-    g_setupWnd = OpenPopup(L"AtecSetupPopup", L"서버 설정", 300, 176, NULL);
+    g_setupWnd = OpenPopup(L"AtecSetupPopup", L"서버 설정", 300, 224, NULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -1881,6 +1956,20 @@ void OpenPasswordDialog()
     }
     EnsurePopupClasses();
     g_passWnd = OpenPopup(L"AtecInputPopup", L"Password 설정", 420, 156, reinterpret_cast<LPVOID>(1));
+}
+
+// ---------------------------------------------------------------------------
+// 기능: IP 입력 창을 연다.
+// 역할: 접속에 쓸 서버 IP를 config_ser.ini 에 저장한다.
+// ---------------------------------------------------------------------------
+void OpenIpDialog()
+{
+    if (g_ipWnd != NULL) {
+        SetForegroundWindow(g_ipWnd);
+        return;
+    }
+    EnsurePopupClasses();
+    g_ipWnd = OpenPopup(L"AtecInputPopup", L"IP 설정", 420, 156, reinterpret_cast<LPVOID>(2));
 }
 
 // ---------------------------------------------------------------------------

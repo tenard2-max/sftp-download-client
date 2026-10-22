@@ -140,6 +140,48 @@ bool DosWindowShown(const std::string& value)
            value == "1";
 }
 
+// ---------------------------------------------------------------------------
+// 기능: config_ser.ini 의 ServerIP 가 있으면 접속 주소로 쓴다.
+// 역할: 서버 설정 창의 IP만 클라이언트 접속에 반영한다.
+// ---------------------------------------------------------------------------
+void ApplyServerIp(const std::string& clientConfigPath, AppConfig& outConfig)
+{
+    std::string serverPath = clientConfigPath;
+    const size_t slash = serverPath.find_last_of("\\/");
+    if (slash == std::string::npos) {
+        serverPath = "config_ser.ini";
+    } else {
+        serverPath = serverPath.substr(0, slash + 1) + "config_ser.ini";
+    }
+
+    std::ifstream input(serverPath.c_str());
+    if (!input) {
+        return;
+    }
+
+    std::string line;
+    std::string serverIp;
+    while (std::getline(input, line)) {
+        line = Trim(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+        std::string key;
+        std::string value;
+        if (!ParseKeyValue(line, key, value)) {
+            continue;
+        }
+        if (_stricmp(key.c_str(), "ServerIP") == 0 && !value.empty()) {
+            serverIp = value;
+        }
+    }
+    if (serverIp.empty()) {
+        return;
+    }
+    outConfig.host = serverIp;
+    LogOk("CONFIG_LOAD", std::string("reason=server_ip source=config_ser.ini ip=") + serverIp);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -276,6 +318,9 @@ bool LoadConfig(const char* absolutePath, AppConfig& outConfig)
             }
         }
     }
+
+    // 서버 설정에 IP가 있으면 그 주소로 접속한다. config.ini 는 수정하지 않는다.
+    ApplyServerIp(path, outConfig);
 
     // 필수값 검증
     if (outConfig.version.empty()) {
