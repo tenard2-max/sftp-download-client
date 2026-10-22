@@ -1,0 +1,2 @@
+서버: win11
+기동 :  OpenSSH.zip 파일을 압축해제 해 OpenSSH 폴더를 C:\에 카피하고 진행.
